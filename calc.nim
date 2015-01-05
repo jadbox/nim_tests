@@ -1,3 +1,4 @@
+# No order of precedence yet except left to right
 import os
 from strutils import parseFloat
 import sequtils
@@ -8,6 +9,7 @@ type FormulaKind = enum
     fkLit,
     fkVar,
     fkRef,
+    fkAdd,
     fkMul
 
 type Formula = ref object
@@ -19,12 +21,13 @@ type Formula = ref object
         vvalue: Formula
     of fkRef: 
         rname: string
-    of fkMul: 
+    of fkMul, fkAdd: 
         terms: array[0..1, Formula]
 
 proc pat2kind(pattern: string): FormulaKind = 
     case pattern[0]
     of '*': fkMul
+    of '+': fkAdd
     of '0'..'9': fkLit
     of '-': fkLit
     of 'a'..'z' : fkRef
@@ -37,7 +40,7 @@ proc buildTokens(line: string) : seq[Formula] =
         var kind = pat2kind c;
         case kind
         of fkLit: result.add Formula(kind:kind, value: parseFloat(c))
-        of fkMul: result.add Formula(kind:kind)
+        of fkMul,fkAdd: result.add Formula(kind:kind)
         of fkRef: result.add Formula(kind:kind, rname:c)
         of fkVar: result.add Formula(kind:kind, vname:c) #refactor
 
@@ -54,7 +57,7 @@ proc buildFormula( s: var seq[Formula] ): Formula =
             result.vvalue = buildFormula s # get value
         of fkRef:
             result = c
-        of fkMul: 
+        of fkMul, fkAdd: 
             result = c
             result.terms[0] = buildFormula s
             result.terms[1] = buildFormula s
@@ -64,6 +67,7 @@ proc print(token:Formula):string =
     case token.kind
     of fkLit: $token.value
     of fkMul: "Mult of (" & print(token.terms[0]) & " " & print(token.terms[1]) & ")"
+    of fkAdd: "Add of (" & print(token.terms[0]) & " " & print(token.terms[1]) & ")"
     of fkVar: "Var " & token.vname & " = " & print(token.vvalue)
     of fkRef: "Ref " & token.rname
 
@@ -72,6 +76,7 @@ proc compute(token:Formula, table:var Table[string, Formula]):float =
     case token.kind
     of fkLit: token.value
     of fkMul: compute(token.terms[0],table) * compute(token.terms[1],table)
+    of fkAdd: compute(token.terms[0],table) + compute(token.terms[1],table)
     of fkRef: compute( table[token.rname],table )
     of fkVar: 
         table[token.vname] = token.vvalue
