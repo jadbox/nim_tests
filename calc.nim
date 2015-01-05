@@ -15,10 +15,10 @@ type Formula = ref object
     of fkLit: 
         value: float
     of fkVar: 
-        name: string, 
-        value: Formula
+        vname: string 
+        vvalue: Formula
     of fkRef: 
-        name: string
+        rname: string
     of fkMul: 
         terms: array[0..1, Formula]
 
@@ -26,6 +26,7 @@ proc pat2kind(pattern: string): FormulaKind =
     case pattern[0]
     of '*': fkMul
     of '0'..'9': fkLit
+    of '-': fkLit
     of 'a'..'z' : fkRef
     of '=': fkVar
     else:   fkLit
@@ -37,8 +38,8 @@ proc buildTokens(line: string) : seq[Formula] =
         case kind
         of fkLit: result.add Formula(kind:kind, value: parseFloat(c))
         of fkMul: result.add Formula(kind:kind)
-        of fkRef: result.add Formula(kind:kind, name:c)
-        of fkVar: result.add Formula(kind:kind, name:c) #refactor
+        of fkRef: result.add Formula(kind:kind, rname:c)
+        of fkVar: result.add Formula(kind:kind, vname:c) #refactor
 
 proc buildFormula( s: var seq[Formula] ): Formula =
     if len(s) > 0:
@@ -49,8 +50,8 @@ proc buildFormula( s: var seq[Formula] ): Formula =
             result = c
         of fkVar:
             result = c
-            result.name = buildFormula(s).name # get ref token name
-            result.value = buildFormula s # get value
+            result.vname = buildFormula(s).rname # get ref token name
+            result.vvalue = buildFormula s # get value
         of fkRef:
             result = c
         of fkMul: 
@@ -63,25 +64,27 @@ proc print(token:Formula):string =
     case token.kind
     of fkLit: $token.value
     of fkMul: "Mult of (" & print(token.terms[0]) & " " & print(token.terms[1]) & ")"
-    of fkVar: "Var " & token.name & " = " & print(token.value)
-    of fkRef: "Ref " & token.name
+    of fkVar: "Var " & token.vname & " = " & print(token.vvalue)
+    of fkRef: "Ref " & token.rname
 
 # Crunch the calcuations
-proc compute(token:Formula, table:TTable[string, Formula]):float =
+proc compute(token:Formula, table:var Table[string, Formula]):float =
     case token.kind
     of fkLit: token.value
-    of fkMul: compute(token.terms[0]) * compute(token.terms[1])
-    of fkRef: table[token.name]
+    of fkMul: compute(token.terms[0],table) * compute(token.terms[1],table)
+    of fkRef: compute( table[token.rname],table )
     of fkVar: 
-        table[token.name] = token.value
-        compute(token.value)
+        table[token.vname] = token.vvalue
+        compute(token.vvalue,table)
 
 # Main Program
-var i = open("calcadd.txt");
+var file = open("calcadd.txt");
 var line : char;
 var table = initTable[string, Formula]()
-for line in i.lines:
+var i:int = 0;
+for line in file.lines:
     var tokens:seq[Formula] = buildTokens(line)
     var f:Formula = buildFormula(tokens)
-    echo compute(f, table)
+    echo "Line " & ($i) & ": " & ($compute(f, table))
+    inc(i)
 
